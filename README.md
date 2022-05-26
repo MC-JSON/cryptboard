@@ -1,6 +1,6 @@
 # DailyCrypt
 
-#### [Website]() | [GitHub](https://github.com/MC-JSON) | [LinkedIn](https://www.linkedin.com/in/jasonwmccoy/)
+#### [Website](https://dailycrypt.herokuapp.com/) | [GitHub](https://github.com/MC-JSON) | [LinkedIn](https://www.linkedin.com/in/jasonwmccoy/)
 
 ---
 
@@ -15,14 +15,6 @@ ReactJS dashboard using the Coinbase API to retrieve data using their REST and W
 1.  ReactJS
 2.  Chart.js
 3.  Coinbase API
-
----
-
-## Screenshots
-
-![HomePage]()
-
-![Crypto]()
 
 ---
 
