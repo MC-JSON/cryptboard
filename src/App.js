@@ -1,74 +1,122 @@
-import './App.css'
+import { useState, useEffect, useRef } from 'react'
+import Dashboard from './components/Dashboard'
+import { formatData } from './utils'
+import './styles/App.css'
 
-//setting state variables
-//all available currency pairs on Coinbase
-const [currencies, setCurrencies] = useState([])
-//current pair selected by user
-const [pair, setPair] = useState('')
-//price of said currency
-const [price, setPrice] = useState('0.00')
-//historical price state
-const [pastData, setPastData] = useState({})
+export default function App() {
+  //set state - all available, pair selected by user, price of current selected, historical price data from selected
+  const [currencies, setCurrencies] = useState([])
+  const [pair, setPair] = useState('')
+  const [price, setPrice] = useState('0.00')
+  const [pastData, setPastData] = useState({})
 
-//creating persistent websocket object
-const wsocket = useRef(null)
-//used to prevent an initial render
-let first = useRef(false)
-//base url for coinbase api
-const url = 'https://api.pro.coinbase.com'
+  //set persistent websocket object
+  const wsocket = useRef(null)
 
-//API initial render
-useEffect(() => {
-  //connecting to websocket API
-  wsocket.current = new WebSocket('wss://ws-feed.pro.coinbase.com')
-  const apiCall = async () => {
-    await fetch(url + '/products')
-      .then((res) => res.json())
-      .then((data) => (pairs = data))
+  //used to prevent an initial render
+  let first = useRef(false)
 
-    //filter to only USD based pairs
-    let filtered = pairs.filter((pair) => {
-      if (pair.quote_currency === 'USD') {
-        return pair
+  const url = 'https://api.pro.coinbase.com'
+
+  useEffect(() => {
+    //connect to websocket API
+    wsocket.current = new WebSocket('wss://ws-feed.pro.coinbase.com')
+
+    let pairs = []
+
+    const apiCall = async () => {
+      await fetch(url + '/products')
+        .then((res) => res.json())
+        .then((data) => (pairs = data))
+      //filter USD based pairs only
+      let filtered = pairs.filter((pair) => {
+        if (pair.quote_currency === 'USD') {
+          return pair
+        }
+      })
+      //sort filtered pairs alphabetically
+      filtered = filtered.sort((a, b) => {
+        if (a.base_currency < b.base_currency) {
+          return -1
+        }
+        if (a.base_currency > b.base_currency) {
+          return 1
+        }
+        return 0
+      })
+
+      setCurrencies(filtered)
+
+      first.current = true
+    }
+
+    apiCall()
+  }, [])
+  //prevent from running on initial render
+  useEffect(() => {
+    if (!first.current) {
+      return
+    }
+
+    let msg = {
+      type: 'subscribe',
+      product_ids: [pair],
+      channels: ['ticker']
+    }
+    let jsonMsg = JSON.stringify(msg)
+    wsocket.current.send(jsonMsg)
+
+    let historicalDataURL = `${url}/products/${pair}/candles?granularity=86400`
+    const fetchHistoricalData = async () => {
+      let dataArr = []
+      await fetch(historicalDataURL)
+        .then((res) => res.json())
+        .then((data) => (dataArr = data))
+
+      let formattedData = formatData(dataArr)
+      setPastData(formattedData)
+    }
+
+    fetchHistoricalData()
+    //update e listener for websocket to listen for newly updated
+    wsocket.current.onmessage = (e) => {
+      let data = JSON.parse(e.data)
+      if (data.type !== 'ticker') {
+        return
       }
-    })
-    //sort filtered currency pairs alphabetically
-    filtered = filtered.sort((a, b) => {
-      if (a.base_currency < b.base_currency) {
-        return -1
+      //when event received, update price
+      if (data.product_id === pair) {
+        setPrice(data.price)
       }
-      if (a.base_currency > b.base_currency) {
-        return 1
-      }
-      return 0
-    })
+    }
+  }, [pair])
 
-    setCurrencies(filtered)
+  const handleSelect = (e) => {
+    let unSubMsg = {
+      type: 'unsubscribe',
+      product_ids: [pair],
+      channels: ['ticker']
+    }
+    let unSub = JSON.stringify(unSubMsg)
 
-    first.current = true
+    wsocket.current.send(unSub)
+
+    setPair(e.target.value)
   }
-  apiCall()
-}, [])
-
-function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="container">
+      {
+        <select name="currency" value={pair} onChange={handleSelect}>
+          {currencies.map((cur, idx) => {
+            return (
+              <option key={idx} value={cur.id}>
+                {cur.display_name}
+              </option>
+            )
+          })}
+        </select>
+      }
+      <Dashboard price={price} data={pastData} />
     </div>
   )
 }
-
-export default App
